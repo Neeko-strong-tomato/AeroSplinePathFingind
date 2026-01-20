@@ -1,12 +1,11 @@
 from enum import Enum
 
-class PathFindingMode(Enum):
-    ASTAR = "astar"
-    RL = "rl"
+class PlanningMode(Enum):
+    COVERAGE = "coverage"
+    RL = "rl" 
 
-# =====================
-# HYPERPARAMÈTRE GLOBAL
-# =====================
+PLANNING_MODE = PlanningMode.COVERAGE
 
-PATHFINDING_MODE = PathFindingMode.RL
-# PATHFINDING_MODE = PathFindingMode.RL
+# Coverage parameters
+ANGLE_THRESHOLD_DEG = 30
+ZIGZAG_STEP = 0.05
