@@ -23,5 +23,5 @@ def segment_by_normals(mesh, angle_threshold_deg=30):
 
         regions.append(region)
 
-    print(f"🧩 {len(regions)} régions détectées")
+    print(f" {len(regions)} régions détectées")
     return regions
