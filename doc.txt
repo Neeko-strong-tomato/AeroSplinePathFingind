@@ -1,0 +1,4 @@
+bibliotheques: 
+trimesh
+pyvista
+Open3D
