@@ -1,107 +1,68 @@
-import random
-
-from mesh_env import MeshEnvironment
-from visualizer import Visualizer
-from robot import Robot
-from config import *
-
+import trimesh
 from coverage.segmentation import segment_by_normals
-from coverage.rl_agent import QAgent
-from coverage.rl_env import MeshRLEnv
+from coverage.region_analyse import analyze_region, local_frame, project_to_2d
+from coverage.zigzag import discretize, zigzag_path, reproject_to_3d, visualize_path
 
 
-print("\n==============================")
-print("MODE : IA (RL Coverage Path Planning)")
-print("==============================\n")
 
 # --------------------------------------------------
-# 1. Chargement du mesh (résolution réduite si fallback)
+# 1. Chargement du mesh
 # --------------------------------------------------
-env_mesh = MeshEnvironment("modele.stl")
-mesh = env_mesh.mesh
-graph = env_mesh.graph
+mesh = trimesh.load("3d_models/test_part.stl")
 
 # --------------------------------------------------
-# 2. Segmentation du mesh
+# 2. Segmentation
 # --------------------------------------------------
-regions = segment_by_normals(
-    mesh,
-    angle_threshold_deg=ANGLE_THRESHOLD_DEG
-)
+regions = segment_by_normals(mesh, angle_threshold_deg=30)
 
 # --------------------------------------------------
-# 3. Agent RL global
+# 3. Boucle sur les régions
 # --------------------------------------------------
-agent = QAgent(
-    alpha=0.1,
-    gamma=0.9,
-    epsilon=0.3
-)
-
 global_path = []
 
-# --------------------------------------------------
-# 4. Coverage Path Planning par région (RL borné)
-# --------------------------------------------------
 for region_id, region_faces in enumerate(regions):
-
     print(f"Région {region_id} | {len(region_faces)} faces")
 
-    # ⚠️ ignorer les régions trop petites
+    # Ignorer les petites régions
     if len(region_faces) < 5:
         continue
 
-    rl_env = MeshRLEnv(
-        graph=graph,
-        faces_in_region=region_faces
-    )
+    # ------------------------------
+    # Analyse région + repère local
+    # ------------------------------
+    info = analyze_region(mesh, region_faces)
+    u, v, n = local_frame(info["vertices"], info["normal"])
 
-    start_face = random.choice(region_faces)
-    state = rl_env.reset(start_face)
+    # ------------------------------
+    # Projection 3D → 2D
+    # ------------------------------
+    points_2d = project_to_2d(info["vertices"], info["center"], u, v)
 
-    face_path = [start_face]
-    done = False
-
-    max_steps = min(len(region_faces) * 3, 300)
-    steps = 0
-
-    while not done and steps < max_steps:
-
-        actions = rl_env.actions()
-        if not actions:
-            break
-
-        action = agent.choose_action(state, actions)
-        next_state, reward, done = rl_env.step(action)
-
-        agent.update(
-            state,
-            action,
-            reward,
-            next_state,
-            rl_env.actions()
-        )
-
-        state = next_state
-        face_path.append(action)
-        steps += 1
-
-    # réduire l'exploration au fil des régions
-    if region_id > 5:
-        agent.epsilon = 0.05
-
-    # --------------------------------------------------
-    # 5. Conversion faces → points 3D
-    # --------------------------------------------------
-    for face_id in face_path:
-        global_path.append(mesh.triangles_center[face_id])
+    # ------------------------------
+    # Discrétisation
+    # ------------------------------
+    grid, min_xy, step = discretize(points_2d, step=0.02)  # 2cm
 
 
+    # ------------------------------
+    # Trajectoire zigzag
+    # ------------------------------
+    path_2d = zigzag_path(grid)
+
+    # ------------------------------
+    # Reprojection 2D → 3D
+    # ------------------------------
+    points_3d = reproject_to_3d(path_2d, min_xy, step, info["center"], u, v)
+
+    # Ajouter au chemin global
+    global_path.extend(points_3d)
+
+    # ------------------------------
+    # Visualisation région (optionnelle)
+    # ------------------------------
+    visualize_path(points_3d)
+
+# --------------------------------------------------
+# 4. Visualisation finale (optionnelle)
+# --------------------------------------------------
 print(f"\nPoints de trajectoire générés : {len(global_path)}")
-
-# --------------------------------------------------
-# 6. Visualisation
-# --------------------------------------------------
-robot = Robot()
-viz = Visualizer(mesh)
-viz.animate(robot, global_path)

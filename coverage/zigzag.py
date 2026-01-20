@@ -1,30 +1,49 @@
 import numpy as np
 
-def zigzag_on_region(mesh, face_ids, step=0.05):
-    centers = mesh.triangles_center[face_ids]
+def discretize(points_2d, step=0.005):
+    """
+    Crée une grille binaire de couverture à partir des points 2D
+    """
+    min_xy = points_2d.min(axis=0)
+    max_xy = points_2d.max(axis=0)
+    size = np.ceil((max_xy - min_xy) / step).astype(int)
 
-    mean = centers.mean(axis=0)
-    U, S, Vt = np.linalg.svd(centers - mean)
+    grid = np.zeros(size, dtype=np.uint8)
+    idx = ((points_2d - min_xy) / step).astype(int)
+    grid[idx[:,0], idx[:,1]] = 1
 
-    u, v = Vt[:2]
+    return grid, min_xy, step
 
-    coords_2d = np.column_stack([
-        (centers - mean) @ u,
-        (centers - mean) @ v
-    ])
 
+def zigzag_path(grid):
     path = []
-    y_vals = np.arange(coords_2d[:,1].min(),
-                        coords_2d[:,1].max(),
-                        step)
-
-    for i, y in enumerate(y_vals):
-        band = coords_2d[np.abs(coords_2d[:,1] - y) < step]
-
-        band = sorted(band, key=lambda p: p[0], reverse=i % 2)
-
-        for p in band:
-            p3d = mean + p[0]*u + p[1]*v
-            path.append(p3d)
-
+    rows, cols = grid.shape
+    for i in range(rows):
+        if i % 2 == 0:
+            for j in range(cols):
+                if grid[i,j]:
+                    path.append((i,j))
+        else:
+            for j in reversed(range(cols)):
+                if grid[i,j]:
+                    path.append((i,j))
     return path
+
+
+def reproject_to_3d(path_2d, min_xy, step, center, u, v):
+    points_3d = []
+    for i,j in path_2d:
+        x = min_xy[0] + i*step
+        y = min_xy[1] + j*step
+        p = center + x*u + y*v
+        points_3d.append(p)
+    return np.array(points_3d)
+
+
+import matplotlib.pyplot as plt
+
+def visualize_path(points_3d):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(points_3d[:,0], points_3d[:,1], points_3d[:,2], 'r.-')
+    plt.show()
