@@ -250,7 +250,6 @@ def create_point_cloud(mesh,resolution = 64):
     uv_tree = build_uv_acceleration(mesh)
 
     # we can sample the volume of Box primitives
-    resolution = 64
     total_points = resolution * resolution
     uv_points = []
     for i in range(resolution):
@@ -269,7 +268,7 @@ def create_point_cloud(mesh,resolution = 64):
 
 
 # load a large- ish PLY model with colors
-mesh = trimesh.load("./3d_models/dome_uv_mapped.obj")
+mesh = trimesh.load("./3d_models/fan.stl")
 
 # Load texture image
 image = Image.open("./UVmap.jpg")
@@ -277,7 +276,7 @@ image = image.convert("RGBA")
 #image_array = np.array(image)
 
 #Unwrap the image if needed
-#mesh = mesh.unwrap(image)
+mesh = mesh.unwrap(image)
 
 points = create_point_cloud(mesh,resolution=128)
 
