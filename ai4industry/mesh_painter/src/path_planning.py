@@ -39,10 +39,10 @@ class PathPlanner:
         face_normal: np.ndarray
     ) -> List[np.ndarray]:
         """
-        Generate adaptive coverage path that wraps around the actual 3D geometry.
+        Generate systematic coverage path using organized grid pattern.
         
-        Creates a sample grid on the face surface and generates optimized 
-        waypoints that follow the actual mesh topology, not flat projections.
+        Creates a structured raster pattern across the face that methodically
+        covers the entire surface with organized, parallel paths.
         
         Args:
             vertices: Face vertices (N x 3)
@@ -54,14 +54,233 @@ class PathPlanner:
         """
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
         
-        # Sample points across the face surface itself
-        waypoints = self._generate_surface_coverage(mesh, face_normal)
+        # Generate organized grid-based coverage
+        waypoints = self._generate_grid_coverage(mesh, vertices, faces, face_normal)
         
         return waypoints
     
+    def _generate_grid_coverage(
+        self,
+        mesh: trimesh.Trimesh,
+        vertices: np.ndarray,
+        faces: np.ndarray,
+        face_normal: np.ndarray
+    ) -> List[np.ndarray]:
+        """
+        Generate methodical coverage using a 2D grid projected onto the 3D face.
+        
+        Creates a regular raster pattern (like painting horizontal lines) that
+        covers the face systematically from one side to the other.
+        """
+        # Create local coordinate system for the face
+        face_center = vertices.mean(axis=0)
+        u_vec = self._get_u_vector(face_normal)
+        v_vec = np.cross(face_normal, u_vec)
+        v_vec = v_vec / (np.linalg.norm(v_vec) + 1e-10)
+        
+        # Project vertices to 2D for bounds
+        vertices_2d = self._project_to_2d(vertices, face_center, u_vec, v_vec)
+        min_x = vertices_2d[:, 0].min()
+        max_x = vertices_2d[:, 0].max()
+        min_y = vertices_2d[:, 1].min()
+        max_y = vertices_2d[:, 1].max()
+        
+        # Create grid of points following raster pattern
+        waypoints = []
+        y = min_y
+        direction = 1  # Alternating direction for snake pattern
+        
+        while y <= max_y:
+            # Generate sweep line at this y coordinate
+            sweep_points = self._generate_grid_sweep(
+                mesh, face_center, u_vec, v_vec, face_normal,
+                y, min_x, max_x, direction, vertices_2d
+            )
+            waypoints.extend(sweep_points)
+            
+            y += self.path_spacing
+            direction *= -1
+        
+        return waypoints
+    
+    def _generate_grid_sweep(
+        self,
+        mesh: trimesh.Trimesh,
+        face_center: np.ndarray,
+        u_vec: np.ndarray,
+        v_vec: np.ndarray,
+        face_normal: np.ndarray,
+        y: float,
+        min_x: float,
+        max_x: float,
+        direction: int,
+        vertices_2d: np.ndarray
+    ) -> List[np.ndarray]:
+        """
+        Generate a single sweep line with adaptive bounds following the face geometry.
+        """
+        # Find actual x extent at this y coordinate
+        y_tolerance = self.path_spacing * 1.5
+        y_indices = np.abs(vertices_2d[:, 1] - y) < y_tolerance
+        
+        if y_indices.any():
+            x_at_y = vertices_2d[y_indices, 0]
+            local_min_x = x_at_y.min()
+            local_max_x = x_at_y.max()
+        else:
+            local_min_x = min_x
+            local_max_x = max_x
+        
+        # Apply alternating direction
+        if direction < 0:
+            local_min_x, local_max_x = local_max_x, local_min_x
+        
+        # Generate evenly-spaced points along this line
+        num_points = max(5, int((abs(local_max_x - local_min_x) / self.path_spacing)))
+        x_coords = np.linspace(local_min_x, local_max_x, num_points)
+        
+        sweep_waypoints = []
+        for x in x_coords:
+            # Create 3D point in the face plane
+            point_3d = face_center + x * u_vec + y * v_vec
+            
+            # Project to mesh surface
+            projected_point = self._project_to_mesh_surface(mesh, point_3d)
+            
+            # Offset by spray height
+            waypoint = projected_point + self.spray_height * face_normal
+            sweep_waypoints.append(waypoint)
+        
+        return sweep_waypoints
+    
+    def _project_to_mesh_surface(
+        self,
+        mesh: trimesh.Trimesh,
+        point: np.ndarray
+    ) -> np.ndarray:
+        """
+        Project a point onto the mesh surface using efficient spatial lookup.
+        
+        Uses KDTree to find nearby vertices first, then checks adjacent faces.
+        """
+        # Build KDTree on first call for full mesh vertices
+        mesh_id = id(mesh)
+        if not hasattr(self, '_kdtree_cache'):
+            self._kdtree_cache = {}
+        
+        if mesh_id not in self._kdtree_cache:
+            self._kdtree_cache[mesh_id] = KDTree(mesh.vertices)
+        
+        kdtree = self._kdtree_cache[mesh_id]
+        
+        # Find k nearest vertices
+        _, indices = kdtree.query(point, k=min(10, len(mesh.vertices)))
+        
+        min_dist = float('inf')
+        closest_point = point.copy()
+        
+        # Check faces adjacent to nearest vertices
+        checked_faces = set()
+        for vertex_idx in indices:
+            vertex_idx = int(vertex_idx)  # Ensure it's an int
+            
+            # Get faces adjacent to this vertex (safe indexing)
+            if vertex_idx < len(mesh.vertex_faces):
+                for face_idx in mesh.vertex_faces[vertex_idx]:
+                    if face_idx < 0 or face_idx in checked_faces:
+                        continue
+                    
+                    checked_faces.add(face_idx)
+                    face = mesh.faces[face_idx]
+                    tri_verts = mesh.vertices[face]
+                    proj, dist = self._project_to_triangle(point, tri_verts)
+                    
+                    if dist < min_dist:
+                        min_dist = dist
+                        closest_point = proj
+        
+        # Fallback: if no faces found, check all faces (shouldn't happen)
+        if len(checked_faces) == 0:
+            for face in mesh.faces:
+                tri_verts = mesh.vertices[face]
+                proj, dist = self._project_to_triangle(point, tri_verts)
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_point = proj
+        
+        return closest_point
+    
+    def _project_to_triangle(
+        self,
+        point: np.ndarray,
+        tri_verts: np.ndarray
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Project point onto triangle surface.
+        
+        Returns (projected_point, distance_to_plane).
+        """
+        v0, v1, v2 = tri_verts
+        
+        # Triangle edges and normal
+        edge0 = v1 - v0
+        edge1 = v2 - v0
+        normal = np.cross(edge0, edge1)
+        norm_len = np.linalg.norm(normal)
+        
+        if norm_len < 1e-10:
+            # Degenerate triangle
+            return tri_verts.mean(axis=0), np.linalg.norm(point - tri_verts.mean(axis=0))
+        
+        normal = normal / norm_len
+        
+        # Project onto plane
+        to_point = point - v0
+        dist_to_plane = np.dot(to_point, normal)
+        proj_plane = point - dist_to_plane * normal
+        
+        # Barycentric coordinates
+        e0_e0 = np.dot(edge0, edge0)
+        e0_e1 = np.dot(edge0, edge1)
+        e1_e1 = np.dot(edge1, edge1)
+        e0_to_proj = np.dot(edge0, proj_plane - v0)
+        e1_to_proj = np.dot(edge1, proj_plane - v0)
+        
+        denom = e0_e0 * e1_e1 - e0_e1 * e0_e1
+        
+        if abs(denom) < 1e-10:
+            return proj_plane, abs(dist_to_plane)
+        
+        u = (e1_e1 * e0_to_proj - e0_e1 * e1_to_proj) / denom
+        v = (e0_e0 * e1_to_proj - e0_e1 * e0_to_proj) / denom
+        
+        # Check if inside triangle
+        if u >= -1e-10 and v >= -1e-10 and u + v <= 1.0 + 1e-10:
+            return proj_plane, abs(dist_to_plane)
+        
+        # Clamp to triangle edges
+        closest = proj_plane
+        min_edge_dist = float('inf')
+        
+        for edge_start, edge_end in [(v0, v1), (v1, v2), (v2, v0)]:
+            edge = edge_end - edge_start
+            edge_len_sq = np.dot(edge, edge)
+            
+            if edge_len_sq < 1e-10:
+                continue
+            
+            t = np.clip(np.dot(proj_plane - edge_start, edge) / edge_len_sq, 0, 1)
+            edge_pt = edge_start + t * edge
+            d = np.linalg.norm(proj_plane - edge_pt)
+            
+            if d < min_edge_dist:
+                min_edge_dist = d
+                closest = edge_pt
+        
+        return closest, abs(dist_to_plane) + min_edge_dist
+    
     def _get_u_vector(self, normal: np.ndarray) -> np.ndarray:
         """Get first orthogonal vector in the plane defined by normal."""
-        # Find vector not parallel to normal
         if abs(normal[0]) < 0.9:
             arbitrary = np.array([1.0, 0.0, 0.0])
         else:
@@ -83,130 +302,6 @@ class PathPlanner:
         x_coords = np.dot(relative, u_vec)
         y_coords = np.dot(relative, v_vec)
         return np.column_stack([x_coords, y_coords])
-    
-    def _generate_surface_coverage(
-        self,
-        mesh: trimesh.Trimesh,
-        face_normal: np.ndarray
-    ) -> List[np.ndarray]:
-        """
-        Generate coverage waypoints by sampling directly on the mesh surface.
-        
-        Creates sample points uniformly across triangles and connects them
-        in an optimized order that wraps around the geometry.
-        """
-        # Sample points directly from mesh triangles using barycentric coords
-        sample_points, triangle_indices = self._sample_mesh_triangles(mesh)
-        
-        if len(sample_points) < 2:
-            # Fallback if sampling fails
-            center = mesh.vertices.mean(axis=0)
-            return [center + self.spray_height * mesh.vertex_normals.mean(axis=0)]
-        
-        # Sort points into efficient coverage order
-        sorted_points, sorted_triangles = self._sort_points_by_coverage(
-            sample_points, triangle_indices
-        )
-        
-        # Generate waypoints with proper height offset using triangle normals
-        waypoints = []
-        for point, tri_idx in zip(sorted_points, sorted_triangles):
-            # Use the actual triangle normal for this point
-            tri_normal = mesh.face_normals[tri_idx]
-            # Offset point by spray height along the surface normal
-            waypoint = point + self.spray_height * tri_normal
-            waypoints.append(waypoint)
-        
-        return waypoints
-    
-    def _sample_mesh_triangles(self, mesh: trimesh.Trimesh) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Sample points uniformly across mesh triangles using barycentric coordinates.
-        
-        Returns:
-            (sample_points, triangle_indices): Arrays of sampled 3D points and their source triangle indices
-        """
-        # Calculate number of samples based on mesh area
-        num_samples = max(10, int(mesh.area / (self.path_spacing ** 2)))
-        
-        # Calculate face areas directly
-        face_areas = []
-        for i, face in enumerate(mesh.faces):
-            v0, v1, v2 = mesh.vertices[face]
-            # Cross product gives 2x the area
-            area = 0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0))
-            face_areas.append(area)
-        
-        face_areas = np.array(face_areas)
-        
-        # Normalize areas for probability distribution
-        total_area = face_areas.sum()
-        if total_area > 1e-10:
-            face_probs = face_areas / total_area
-        else:
-            face_probs = np.ones(len(mesh.faces)) / len(mesh.faces)
-        
-        # Sample triangles based on area
-        sampled_face_indices = np.random.choice(
-            len(mesh.faces),
-            size=num_samples,
-            p=face_probs
-        )
-        
-        sample_points = []
-        triangle_indices = []
-        
-        # For each sampled triangle, get a random point on it
-        for face_idx in sampled_face_indices:
-            face = mesh.faces[face_idx]
-            v0, v1, v2 = mesh.vertices[face]
-            
-            # Random barycentric coordinates
-            r1 = np.random.random()
-            r2 = np.random.random()
-            
-            # Ensure they're in the triangle
-            if r1 + r2 > 1:
-                r1 = 1 - r1
-                r2 = 1 - r2
-            
-            # Compute point using barycentric coords
-            point = (1 - r1 - r2) * v0 + r1 * v1 + r2 * v2
-            sample_points.append(point)
-            triangle_indices.append(face_idx)
-        
-        return np.array(sample_points), np.array(triangle_indices)
-    
-    def _sort_points_by_coverage(
-        self,
-        points: np.ndarray,
-        triangle_indices: np.ndarray
-    ) -> Tuple[List[np.ndarray], List[int]]:
-        """
-        Sort sample points into an efficient coverage order.
-        
-        Uses greedy nearest neighbor to minimize travel distance.
-        """
-        if len(points) == 0:
-            return [], []
-        
-        # Use greedy nearest neighbor to order points efficiently
-        remaining = list(range(len(points)))
-        sorted_indices = [remaining.pop(0)]
-        current_point = points[sorted_indices[0]]
-        
-        while remaining:
-            # Find nearest unvisited point
-            distances = np.linalg.norm(points[remaining] - current_point, axis=1)
-            nearest_local_idx = np.argmin(distances)
-            nearest_idx = remaining.pop(nearest_local_idx)
-            sorted_indices.append(nearest_idx)
-            current_point = points[nearest_idx]
-        
-        sorted_points = [points[i] for i in sorted_indices]
-        sorted_triangles = [triangle_indices[i] for i in sorted_indices]
-        
-        return sorted_points, sorted_triangles
     
     def optimize_waypoints(
         self,
