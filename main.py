@@ -4,10 +4,10 @@ from robot import Robot
 from visualizer import Visualizer
 
 # Charger mesh
-env = MeshEnvironment("/Users/neeko/Downloads/Airplane_v1_L1.123c4a6fedec-1680-4a36-a228-b0d440a4f280/Airplane_v1_L1.obj")
+env = MeshEnvironment("./3d_models/fan_uv_mapped.obj")
 
-start_face = 0
-goal_face = 50
+start_face = 2
+goal_face = 2
 
 # Pathfinding classique
 faces_path = astar_path(env.graph, start_face, goal_face)
@@ -21,5 +21,4 @@ robot = Robot()
 # Visualisation
 viz = Visualizer(env.mesh)
 viz.add_path(path_points)
-viz.add_robot(robot)
-viz.animate(robot, path_points)
+viz.scene.show()

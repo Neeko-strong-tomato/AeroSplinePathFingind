@@ -267,33 +267,34 @@ def create_point_cloud(mesh,resolution = 64):
     return points
 
 
-# load a large- ish PLY model with colors
-mesh = trimesh.load("./3d_models/fan.stl")
+if __name__ == "__main__":
+    # load a large- ish PLY model with colors
+    mesh = trimesh.load("./3d_models/fan.stl")
 
-# Load texture image
-image = Image.open("./UVmap.jpg")
-image = image.convert("RGBA")
-#image_array = np.array(image)
+    # Load texture image
+    image = Image.open("./UVmap.jpg")
+    image = image.convert("RGBA")
+    #image_array = np.array(image)
 
-#Unwrap the image if needed
-mesh = mesh.unwrap(image)
+    #Unwrap the image if needed
+    mesh = mesh.unwrap(image)
 
-points = create_point_cloud(mesh,resolution=128)
+    points = create_point_cloud(mesh,resolution=128)
 
-# distance from point to surface of meshdistances
-# create a PointCloud object out of each (n,3) list of points
-cloud_close = trimesh.points.PointCloud(points[0])
+    # distance from point to surface of meshdistances
+    # create a PointCloud object out of each (n,3) list of points
+    cloud_close = trimesh.points.PointCloud(points[0])
 
-# create a unique color for each point
-cloud_colors = np.array([trimesh.visual.random_color() for i in points])
+    # create a unique color for each point
+    cloud_colors = np.array([trimesh.visual.random_color() for i in points])
 
-# set the colors on the random point and its nearest point to be the same
-cloud_close.vertices_color = cloud_colors
+    # set the colors on the random point and its nearest point to be the same
+    cloud_close.vertices_color = cloud_colors
 
-# create a scene containing the mesh and two sets of points
-scene = trimesh.Scene([mesh, cloud_close])
+    # create a scene containing the mesh and two sets of points
+    scene = trimesh.Scene([mesh, cloud_close])
 
-# show the scene we are using
-scene.show()
+    # show the scene we are using
+    scene.show()
 
 

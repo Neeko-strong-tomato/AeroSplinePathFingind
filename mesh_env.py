@@ -1,6 +1,7 @@
 import trimesh
 import numpy as np
 import networkx as nx
+from PIL import Image
 import os
 
 class MeshEnvironment:
@@ -22,6 +23,24 @@ class MeshEnvironment:
             mesh = trimesh.load(self.mesh_path)
             if not isinstance(mesh, trimesh.Trimesh):
                 raise ValueError("Objet chargé invalide")
+            else:
+
+                assert mesh.visual.uv is not None, "Mesh has no UVs"
+                assert mesh.visual.uv.shape[1] == 2, "Invalid UV format"
+                # Load texture image
+                image = Image.open("./UVmap.jpg")
+                image = image.convert("RGBA")
+                #image_array = np.array(image)
+
+                mesh.visual = trimesh.visual.texture.TextureVisuals(
+                    uv=mesh.visual.uv,
+                    image=image
+                )
+
+                assert mesh.visual.uv is not None, "Mesh has no UVs"
+                assert mesh.visual.uv.shape[1] == 2, "Invalid UV format"
+                #mesh = mesh.unwrap(image)
+
             print(f"✅ Mesh chargé : {self.mesh_path}")
             return mesh
 
