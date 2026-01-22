@@ -23,7 +23,7 @@ best_episode_path = []
 
 # Entraîner le Q-agent
 print("🎓 Entraînement du Q-agent sur la UV map...")
-num_episodes = 30
+num_episodes = 100
 for episode in range(num_episodes):
     state = uv_env.reset(start_uv)
     done = False

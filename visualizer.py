@@ -27,39 +27,33 @@ class Visualizer:
             print(f"❌ Erreur ajout robot: {e}")
 
     def animate(self, robot, path, delay=0.05):
-        """Anime le robot le long du chemin"""
+        """Affiche simplement le chemin sans animation"""
         try:
-            print(f"🎬 Démarrage animation avec {len(path)} points")
+            print(f"🎨 Affichage du chemin avec {len(path)} points")
             
+            # Peindre toute la trace
             for i, p in enumerate(path):
-                # Convertir en numpy array
                 position = np.array(p, dtype=np.float32)
                 
                 if position.shape != (3,):
                     print(f"⚠️  Point {i} invalide: {position.shape}, attendu (3,)")
                     continue
                 
-                # Bouger le robot
                 robot.move_to(position)
                 
-                # Créer la trace (tous les 5 points pour éviter trop de géométries)
+                # Créer la trace
                 if i % 5 == 0:
                     trail = robot.paint_trail()
                     if trail is not None:
                         self.scene.add_geometry(trail)
-                
-                # Afficher chaque 20 points pour aller plus vite
-                if i % 20 == 0:
-                    try:
-                        self.scene.show()
-                    except:
-                        pass
-                
-                time.sleep(delay)
             
-            print(f"✅ Animation terminée")
-            self.scene.show()
+            # Placer le robot au point final
+            if len(path) > 0:
+                robot.move_to(np.array(path[-1], dtype=np.float32))
+            
+            print(f"✅ Chemin affiché")
+            self.scene.show(block=True)
         except Exception as e:
-            print(f"❌ Erreur animation: {e}")
+            print(f"❌ Erreur affichage: {e}")
             import traceback
             traceback.print_exc()

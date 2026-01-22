@@ -72,15 +72,31 @@ class UVMapRLEnv:
             return direction / norm
         return None
 
-    def _calculate_orientation_penalty(self, from_uv, to_uv):
-        """Pénalise les changements d'orientation brusques"""
-        current_direction = self._calculate_direction_2d(from_uv, to_uv)
-        if current_direction is None or self.previous_direction is None:
-            return 0
+    def _get_surface_normal_at_uv(self, uv_pos):
+        """Obtient le vecteur normal de la surface au point UV"""
+        # Trouver la face la plus proche de cette position UV
+        distances = np.linalg.norm(self.face_uv_centers - uv_pos, axis=1)
+        closest_face_idx = np.argmin(distances)
         
-        dot_product = np.clip(np.dot(current_direction, self.previous_direction), -1, 1)
-        angle_change = np.arccos(dot_product)
-        return angle_change / np.pi
+        # Retourner la normale de cette face
+        face_normal = self.mesh_env.mesh.face_normals[closest_face_idx]
+        return face_normal / np.linalg.norm(face_normal)
+
+    def _calculate_orientation_penalty(self, from_uv, to_uv):
+        """Calcule l'angle entre les vecteurs normales de départ et d'arrivée
+        Pénalité exponentielle : plus forte pour les directions opposées"""
+        # Obtenir les normales de surface à chaque position
+        normal_from = self._get_surface_normal_at_uv(from_uv)
+        normal_to = self._get_surface_normal_at_uv(to_uv)
+        
+        # Calculer l'angle entre les deux normales
+        dot_product = np.clip(np.dot(normal_from, normal_to), -1, 1)
+        angle = np.arccos(dot_product)
+        
+        # Pénalité quadratique pour punir fortement les directions opposées
+        # angle/π va de 0 à 1, (angle/π)² va de 0 à 1 avec plus de poids sur les valeurs hautes
+        normalized_angle = angle / np.pi
+        return normalized_angle ** 2
 
     def _check_path_crossing(self, window=10):
         """Pénalise la revisite récente"""
@@ -112,7 +128,7 @@ class UVMapRLEnv:
             reward += 1.0
 
         # Pénalité pour recouvrements récents
-        reward -= self._check_path_crossing() * 0.01
+        reward -= self._check_path_crossing() * 0.1
 
         # Pénalité pour changement d'orientation brusque
         reward -= self._calculate_orientation_penalty(self.state, action) * 0.5
