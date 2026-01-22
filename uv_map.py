@@ -274,7 +274,7 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
         return 2 - (cross_product + 1) 
     
     def distance_position(cur_pos,next_pos):
-        return np.linalg.norm(next_pos-cur_pos)
+        return np.linalg.norm((next_pos-cur_pos) * np.array([1,2,1]))
     
     def distance_previous_direction(previous_dir,cur_dir):
         # Orientation distance
@@ -287,6 +287,9 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
     print(point_amount)
     exploration_map = np.zeros((points.shape[0]))
 
+    jumping_distance = 0.1
+    jumping = False
+    jump_amount = 0
     current_index = starting_pos_index
     previous_dir = np.array([0,0,0])
     step = 0
@@ -296,23 +299,34 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
         min_distance = 999
         best_index = current_index
         for i in range(point_amount):
-            if(exploration_map[i] < 1):
-                d = distance_position(points[current_index],points[i])
-                dir = ((points[i] - points[current_index]) / d)
-                dist = 20*d + 5*distance_normal(mesh.face_normals[face_ids[current_index]],mesh.face_normals[face_ids[i]]) + 0.0 * distance_previous_direction(previous_dir,dir)
+            if(exploration_map[i] < 1 and (np.linalg.norm(points[i] - points[current_index],ord=1) < jumping_distance or jumping)):
+
+                dir = ((points[i] - points[current_index]) / np.linalg.norm(points[i] - points[current_index]))
+
+                dist = 5*distance_position(points[current_index],points[i]) + 0*distance_normal(mesh.face_normals[face_ids[current_index]],mesh.face_normals[face_ids[i]]) + 0 * distance_previous_direction(previous_dir,dir)
+                
                 if(dist < min_distance):
                     best_index = i
                     min_distance = dist
+        jumping = False
         step += 1
         if(step % 100 == 0):
             print(step," out of ",point_amount)
-        if(min_distance > 0.5): # Jump
-            jump_list.append(step)
+        
         if(best_index == current_index):
-            print("Blocked couldn't proceed")
-            break
+            if(step >= point_amount):
+                print("Done ! Steps : ",step, " Jumps : ", jump_amount)
+                jump_list.append(step+jump_amount)
+                break
+            else:
+                print("Blocked ! Jumping")
+                jump_list.append(step+jump_amount)
+                jumping = True
+                step -= 1
+                jump_amount += 1
+            
         else:
-            previous_dir = ((points[best_index] - points[current_index]) / distance_position(points[current_index],points[best_index]))
+            previous_dir = ((points[best_index] - points[current_index]) / np.linalg.norm(points[current_index]- points[best_index]))
         current_index = best_index
         
     
@@ -321,7 +335,7 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
 
 if __name__ == "__main__":
     # load a large- ish PLY model with colors
-    mesh = trimesh.load("./3d_models/dome_uv_mapped.obj")
+    mesh = trimesh.load("./3d_models/surface.stl")
 
     # Load texture image
     image = Image.open("./UVmap.jpg")
@@ -329,7 +343,7 @@ if __name__ == "__main__":
     #image_array = np.array(image)
 
     #Unwrap the image if needed
-    if(mesh.visual.uv is None):
+    if(not hasattr(mesh.visual,'uv')):
         mesh = mesh.unwrap(image)
 
     points = create_point_cloud(mesh,resolution=64)
@@ -348,7 +362,7 @@ if __name__ == "__main__":
     path_entities = []
 
     for i in range(len(jump_list)-1):
-        path_entities.append(Line(points=np.arange(jump_list[i],jump_list[i+1])))
+        path_entities.append(Line(points=np.arange(jump_list[i]+1,jump_list[i+1])))
 
     path = trimesh.path.Path3D(
     vertices=path_points,
@@ -357,7 +371,7 @@ if __name__ == "__main__":
     )
 
     # create a scene containing the mesh and two sets of points
-    scene = trimesh.Scene([mesh, cloud_close,path])
+    scene = trimesh.Scene([mesh,path])
 
     # show the scene we are using
     scene.show()
