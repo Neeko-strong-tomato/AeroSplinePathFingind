@@ -4,3 +4,4 @@ pyglet
 pyglet<2
 networkx
 scipy
+time
