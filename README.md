@@ -13,3 +13,12 @@ Voici l’ensemble des branches de développement mises en place par l’équipe
 - master :
 - rluv :
 - uv_mapping :
+
+De manière générale, chaque branche dérive d'une base de code fourni dans le main contenant des modules pour :
+   - emmuler un environement 3D pour simuler le tracé
+   - des blueprints pour les différentes méthodes de pathFinding
+   - un gestionnaire de la tête robot
+   - des implementation naïves pour le RL & l'algorithmie
+   - l'algorithme de segmentation
+
+De plus une tentative d'approche RL prosposant des trajets suivant les arêtes.
