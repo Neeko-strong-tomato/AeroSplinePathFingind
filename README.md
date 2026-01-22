@@ -12,7 +12,7 @@ Voici l’ensemble des branches de développement mises en place par l’équipe
 - cam : Échec de la mise en place de RL (basé sur l’architecture du main initiale, pas forcément adaptée).
 - noLLM : Première version algorithmique très simple. Le but de cette branche était de faire un test sans utilisation de LLM pour découvrir trimesh.
 - rluv : Tentative de mise en place de RL, problème majeur le robot traverse le mesh 3D. Bonne couverture cependant après beaucoup d'entrainement.
-- uv_mapping :
+- uv_mapping : Tentative de méthode algorithmique par cartographie UV puis conversion en nuage de point pour une création de chemin par algorithme glouton
 
 De manière générale, chaque branche dérive d'une base de code fourni dans le main contenant des modules pour :
    - emmuler un environement 3D pour simuler le tracé
