@@ -220,3 +220,6 @@ ai4industry/mesh_painter/my_output*
 ai4industry/mesh_painter/stl/.mesh_painter_cache/e3b650a42d6d95ef3ea1ce5edb7a26bb.json
 ai4industry/mesh_painter/stl/.mesh_painter_cache/f9aed65c1e517490ff23eb25ecb0c20e.json
 ai4industry/mesh_painter/extracted_faces/
+cube.stl
+dome.stl
+fan.stl
