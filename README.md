@@ -10,7 +10,7 @@ Voici l’ensemble des branches de développement mises en place par l’équipe
 - Pauline :
 - RL2D :
 - cam : Échec de la mise en place de RL (basé sur l’architecture du main initiale, pas forcément adaptée).
-- master :
+- noLLM : Première version algorithmique très simple. Le but de cette branche était de faire un test sans utilisation de LLM pour découvrir trimesh.
 - rluv : Tentative de mise en place de RL, problème majeur le robot traverse le mesh 3D. Bonne couverture cependant après beaucoup d'entrainement.
 - uv_mapping :
 
