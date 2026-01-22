@@ -4,16 +4,19 @@ from pathfinding.rl_env import UVMapRLEnv
 from robot import Robot
 from visualizer import Visualizer
 import numpy as np
-
+from uv_map import create_point_cloud
 # Charger mesh
 env = MeshEnvironment("./dome.stl")
+
+# Récupérer la UV map 2D
+face_uv_centers, _ = env.generate_uv_map()
+
+# Position de départ en UV
+start_uv = np.array([0.5, 0.5])
 
 # Initialiser Q-Learning agent et environment UV
 q_agent = QAgent(alpha=0.1, gamma=0.9, epsilon=0.2)  
 uv_env = UVMapRLEnv(env, coverage_threshold=0.9, cell_size=0.02)
-
-# Position de départ en UV
-start_uv = np.array([0.5, 0.5])
 
 best_episode_reward = -float('inf')
 best_episode_path = []
@@ -28,7 +31,7 @@ for episode in range(num_episodes):
     episode_path = [state.copy()]
     
     steps = 0
-    while not done and steps < 1000:
+    while not done and steps < 200:
         actions = uv_env.actions(state)
         if not actions:
             break
@@ -64,7 +67,7 @@ uv_env_final = UVMapRLEnv(env, coverage_threshold=0.9, cell_size=0.02)
 uv_path = [start_uv.copy()]
 state = start_uv.copy()
 
-for iteration in range(2200):
+for iteration in range(1000):
     coverage_pct = uv_env_final._get_coverage_ratio() * 100
     
     if coverage_pct >= 90:
@@ -95,7 +98,6 @@ print(f"\n✅ Chemin généré: {len(uv_path)} points UV (couverture: {final_cov
 
 # Convertir chemin UV en positions 3D
 print("🔄 Conversion UV → 3D...")
-face_uv_centers, _ = env.generate_uv_map()
 path_3d = []
 for uv_pos in uv_path:
     distances = np.linalg.norm(face_uv_centers - uv_pos, axis=1)

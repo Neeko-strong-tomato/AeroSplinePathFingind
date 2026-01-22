@@ -1,20 +1,10 @@
 import random
 import numpy as np
-import networkx as nx
-from .astar import astar_path
-
-
+from collections import defaultdict
+from uv_map import create_point_cloud
 class UVMapRLEnv:
-    """Environnement RL navigant dans l'espace 2D des UV maps avec validation d'adjacence des faces"""
-    
+    """Environnement RL navigant dans l'espace 2D des UV maps"""
     def __init__(self, mesh_env, coverage_threshold=0.95, max_steps_per_episode=500, cell_size=0.02):
-        """
-        Args:
-            mesh_env: MeshEnvironment avec mesh et graph de connectivité
-            coverage_threshold: ratio de couverture requis pour terminer
-            max_steps_per_episode: nombre max de pas par épisode
-            cell_size: taille des cellules pour la grille discrète
-        """
         self.mesh_env = mesh_env
         self.coverage_threshold = coverage_threshold
         self.max_steps = max_steps_per_episode
@@ -23,42 +13,18 @@ class UVMapRLEnv:
         # Obtenir la UV map 2D
         self.face_uv_centers, _ = mesh_env.generate_uv_map()
         
-        # Graph de connectivité des faces
-        self.graph = mesh_env.graph
-        self.num_faces = len(mesh_env.mesh.faces)
-        
         # État = position (x, y) en 2D dans l'espace UV
         self.state = None
         self.visited_cells = set()  # Ensemble de cellules couvertes
         self.path_history = []
+        self.previous_direction = None
         self.steps = 0
-    
-    def _uv_to_face(self, uv_pos):
-        """Convertit une position UV en indice de face"""
-        distances = np.linalg.norm(self.face_uv_centers - uv_pos, axis=1)
-        return np.argmin(distances)
-    
+
     def _uv_to_grid_cell(self, uv_pos):
         """Convertit une position UV en cellule de grille discrète"""
         cell_x = int(np.clip(uv_pos[0] / self.cell_size, 0, 1000))
         cell_y = int(np.clip(uv_pos[1] / self.cell_size, 0, 1000))
         return (cell_x, cell_y)
-    
-    def _are_faces_adjacent(self, face1, face2):
-        """Vérifie si deux faces partagent une arête"""
-        if face1 == face2:
-            return True
-        if face1 not in self.graph or face2 not in self.graph:
-            return False
-        return self.graph.has_edge(face1, face2)
-    
-    def _is_valid_move(self, from_uv, to_uv):
-        """Vérifie que le mouvement ne traverse pas le vide"""
-        from_face = self._uv_to_face(from_uv)
-        to_face = self._uv_to_face(to_uv)
-        
-        # Vérifier l'adjacence des faces
-        return self._are_faces_adjacent(from_face, to_face)
 
     def reset(self, start_uv=None):
         """Réinitialise l'environnement avec position UV de départ"""
@@ -68,6 +34,7 @@ class UVMapRLEnv:
         self.state = np.array(start_uv, dtype=np.float32)
         self.visited_cells = {self._uv_to_grid_cell(self.state)}
         self.path_history = [self.state.copy()]
+        self.previous_direction = None
         self.steps = 0
         return self.state
 
@@ -97,20 +64,39 @@ class UVMapRLEnv:
         
         return actions
 
+    def _calculate_direction_2d(self, from_uv, to_uv):
+        """Calcule la direction normalisée entre deux positions UV"""
+        direction = to_uv - from_uv
+        norm = np.linalg.norm(direction)
+        if norm > 1e-6:
+            return direction / norm
+        return None
+
     def _get_surface_normal_at_uv(self, uv_pos):
         """Obtient le vecteur normal de la surface au point UV"""
-        face_idx = self._uv_to_face(uv_pos)
-        face_normal = self.mesh_env.mesh.face_normals[face_idx]
+        # Trouver la face la plus proche de cette position UV
+        distances = np.linalg.norm(self.face_uv_centers - uv_pos, axis=1)
+        closest_face_idx = np.argmin(distances)
+        
+        # Retourner la normale de cette face
+        face_normal = self.mesh_env.mesh.face_normals[closest_face_idx]
         return face_normal / np.linalg.norm(face_normal)
 
     def _calculate_orientation_penalty(self, from_uv, to_uv):
-        """Calcule l'angle entre les vecteurs normales de départ et d'arrivée"""
+        """Calcule l'angle entre les vecteurs normales de départ et d'arrivée
+        Pénalité exponentielle : plus forte pour les directions opposées"""
+        # Obtenir les normales de surface à chaque position
         normal_from = self._get_surface_normal_at_uv(from_uv)
         normal_to = self._get_surface_normal_at_uv(to_uv)
         
+        # Calculer l'angle entre les deux normales
         dot_product = np.clip(np.dot(normal_from, normal_to), -1, 1)
         angle = np.arccos(dot_product)
-        return angle / np.pi
+        
+        # Pénalité quadratique pour punir fortement les directions opposées
+        # angle/π va de 0 à 1, (angle/π)² va de 0 à 1 avec plus de poids sur les valeurs hautes
+        normalized_angle = angle / np.pi
+        return normalized_angle ** 2
 
     def _check_path_crossing(self, window=10):
         """Pénalise la revisite récente"""
@@ -132,11 +118,7 @@ class UVMapRLEnv:
     def calculate_reward(self, action):
         """Calcule le reward pour maximiser la couverture"""
         reward = 0
-        
-        # Vérifier que le mouvement ne traverse pas le vide
-        if not self._is_valid_move(self.state, action):
-            return -100.0  # Grosse pénalité si traversée du vide
-        
+
         # Pénalité par pas
         reward -= 0.05
 
@@ -172,13 +154,10 @@ class UVMapRLEnv:
         self.visited_cells.add(action_cell)
         self.path_history.append(self.state.copy())
         
+        self.previous_direction = self._calculate_direction_2d(prev_state, action)
         self.steps += 1
 
         coverage_ratio = self._get_coverage_ratio()
         done = (coverage_ratio >= self.coverage_threshold) or (self.steps >= self.max_steps)
 
         return self.state, reward, done
-
-
-# Alias pour compatibilité
-FaceGraphRLEnv = UVMapRLEnv
