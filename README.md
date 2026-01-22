@@ -11,5 +11,5 @@ Voici l’ensemble des branches de développement mises en place par l’équipe
 - RL2D :
 - cam : Échec de la mise en place de RL (basé sur l’architecture du main initiale, pas forcément adaptée).
 - master :
-- rluv :
+- rluv : Tentative de mise en place de RL, problème majeur le robot traverse le mesh 3D. Bonne couverture cependant après beaucoup d'entrainement.
 - uv_mapping :
