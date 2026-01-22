@@ -3,6 +3,7 @@ import trimesh
 from PIL import Image
 from shapely.geometry import Polygon, Point
 from shapely.strtree import STRtree
+from trimesh.path.entities import Line
 
 def raycast_uv(mesh: trimesh.Trimesh,
                ray_origin: np.ndarray,
@@ -266,10 +267,61 @@ def create_point_cloud(mesh,resolution = 64):
     points = [np.array(ref_points),np.array(ref_face_ids)]
     return points
 
+def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
+    def distance_normal(cur_normal,next_normal):
+        # Orientation distance
+        cross_product = np.clip(np.dot(next_normal, cur_normal), -1, 1)
+        return 2 - (cross_product + 1) 
+    
+    def distance_position(cur_pos,next_pos):
+        return np.linalg.norm(next_pos-cur_pos)
+    
+    def distance_previous_direction(previous_dir,cur_dir):
+        # Orientation distance
+        cross_product = np.clip(np.dot(previous_dir, cur_dir), -1, 1)
+        return 2 - (cross_product + 1) 
+
+    jump_list = [0]
+    path = []
+    point_amount = points.shape[0]
+    print(point_amount)
+    exploration_map = np.zeros((points.shape[0]))
+
+    current_index = starting_pos_index
+    previous_dir = np.array([0,0,0])
+    step = 0
+    while(True):
+        exploration_map[current_index] = 1
+        path.append(points[current_index])
+        min_distance = 999
+        best_index = current_index
+        for i in range(point_amount):
+            if(exploration_map[i] < 1):
+                d = distance_position(points[current_index],points[i])
+                dir = ((points[i] - points[current_index]) / d)
+                dist = 20*d + 5*distance_normal(mesh.face_normals[face_ids[current_index]],mesh.face_normals[face_ids[i]]) + 0.0 * distance_previous_direction(previous_dir,dir)
+                if(dist < min_distance):
+                    best_index = i
+                    min_distance = dist
+        step += 1
+        if(step % 100 == 0):
+            print(step," out of ",point_amount)
+        if(min_distance > 0.5): # Jump
+            jump_list.append(step)
+        if(best_index == current_index):
+            print("Blocked couldn't proceed")
+            break
+        else:
+            previous_dir = ((points[best_index] - points[current_index]) / distance_position(points[current_index],points[best_index]))
+        current_index = best_index
+        
+    
+    return (path,jump_list)
+
 
 if __name__ == "__main__":
     # load a large- ish PLY model with colors
-    mesh = trimesh.load("./3d_models/fan.stl")
+    mesh = trimesh.load("./3d_models/dome_uv_mapped.obj")
 
     # Load texture image
     image = Image.open("./UVmap.jpg")
@@ -277,22 +329,35 @@ if __name__ == "__main__":
     #image_array = np.array(image)
 
     #Unwrap the image if needed
-    mesh = mesh.unwrap(image)
+    if(mesh.visual.uv is None):
+        mesh = mesh.unwrap(image)
 
-    points = create_point_cloud(mesh,resolution=128)
+    points = create_point_cloud(mesh,resolution=64)
 
     # distance from point to surface of meshdistances
     # create a PointCloud object out of each (n,3) list of points
     cloud_close = trimesh.points.PointCloud(points[0])
 
-    # create a unique color for each point
-    cloud_colors = np.array([trimesh.visual.random_color() for i in points])
+    # Convertir faces → positions 3D
+    (path_points,jump_list) = calculate_path(mesh,points[0],points[1])
 
-    # set the colors on the random point and its nearest point to be the same
-    cloud_close.vertices_color = cloud_colors
+    # Visualisation
+    #path = trimesh.load_path(path_points)
+    #path.colors = [trimesh.visual.random_color()]
+
+    path_entities = []
+
+    for i in range(len(jump_list)-1):
+        path_entities.append(Line(points=np.arange(jump_list[i],jump_list[i+1])))
+
+    path = trimesh.path.Path3D(
+    vertices=path_points,
+    entities=path_entities,
+    colors = [trimesh.visual.random_color() for e in path_entities]
+    )
 
     # create a scene containing the mesh and two sets of points
-    scene = trimesh.Scene([mesh, cloud_close])
+    scene = trimesh.Scene([mesh, cloud_close,path])
 
     # show the scene we are using
     scene.show()
