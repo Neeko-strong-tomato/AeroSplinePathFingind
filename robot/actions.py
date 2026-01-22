@@ -1,0 +1,7 @@
+# robot/actions.py
+
+ACTION_MOVE = 0
+ACTION_LEFT = 1
+ACTION_RIGHT = 2
+ACTION_STAY = 3
+ACTION_STOP = 4
