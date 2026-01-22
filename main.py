@@ -31,7 +31,7 @@ for episode in range(num_episodes):
     episode_path = [state.copy()]
     
     steps = 0
-    while not done and steps < 200:
+    while not done and steps < 5000:
         actions = uv_env.actions(state)
         if not actions:
             break
@@ -50,7 +50,7 @@ for episode in range(num_episodes):
         steps += 1
     
     coverage_pct = uv_env._get_coverage_ratio() * 100
-    print(f"Episode {episode+1:2d}/{num_episodes}: Reward={episode_reward:7.1f}, Coverage={coverage_pct:5.1f}%, Steps={steps:3d}")
+    print(f"Episode {episode+1:2d}/{num_episodes}: Reward={episode_reward:7.1f}, Coverage={coverage_pct:5.1f}%, Steps={steps:4d}")
     
     if episode_reward > best_episode_reward:
         best_episode_reward = episode_reward

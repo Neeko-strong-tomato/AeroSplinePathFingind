@@ -4,7 +4,7 @@ from collections import defaultdict
 from uv_map import create_point_cloud
 class UVMapRLEnv:
     """Environnement RL navigant dans l'espace 2D des UV maps"""
-    def __init__(self, mesh_env, coverage_threshold=0.95, max_steps_per_episode=500, cell_size=0.02):
+    def __init__(self, mesh_env, coverage_threshold=0.95, max_steps_per_episode=2000, cell_size=0.02):
         self.mesh_env = mesh_env
         self.coverage_threshold = coverage_threshold
         self.max_steps = max_steps_per_episode
@@ -115,6 +115,41 @@ class UVMapRLEnv:
         max_cells = int((1.0 / self.cell_size) ** 2)
         return len(self.visited_cells) / max_cells
 
+    def _is_on_mesh(self, uv_pos):
+        """Vérifie si la position UV correspond à une face réelle du mesh"""
+        # On utilise une distance seuil très faible pour confirmer la présence d'une face
+        distances = np.linalg.norm(self.face_uv_centers - uv_pos, axis=1)
+        min_dist = np.min(distances)
+        
+        # Si la distance au centre de face le plus proche est trop grande, 
+        # on est probablement dans le "vide" de l'UV map
+        return min_dist < self.cell_size * 2.0
+
+    def _check_mesh_integrity(self, from_uv, to_uv):
+        """
+        Pénalise si le mouvement traverse le vide ou saute entre des 
+        parties du mesh non connectées.
+        """
+        # 1. Vérifier si l'arrivée est sur le mesh
+        if not self._is_on_mesh(to_uv):
+            return 2.0 # Forte pénalité pour sortie du mesh
+
+        # 2. Vérifier l'adjacence physique (optionnel mais recommandé)
+        # On trouve les faces de départ et d'arrivée
+        dists_from = np.linalg.norm(self.face_uv_centers - from_uv, axis=1)
+        dists_to = np.linalg.norm(self.face_uv_centers - to_uv, axis=1)
+        
+        face_from = np.argmin(dists_from)
+        face_to = np.argmin(dists_to)
+
+        # Si les faces ne sont pas les mêmes et ne sont pas adjacentes dans le graphe
+        if face_from != face_to:
+            if not self.mesh_env.graph.has_edge(face_from, face_to):
+                return 1.5 # Pénalité pour "saut" téléporté entre deux îles UV
+                
+        return 0.0
+
+
     def calculate_reward(self, action):
         """Calcule le reward pour maximiser la couverture"""
         reward = 0
@@ -122,10 +157,21 @@ class UVMapRLEnv:
         # Pénalité par pas
         reward -= 0.05
 
+        # --- NOUVELLE PÉNALITÉ DE TRAVERSÉE ---
+        mesh_penalty = self._check_mesh_integrity(self.state, action)
+        reward -= mesh_penalty * 2.0  # Multiplicateur d'importance
+        
+        if mesh_penalty > 0:
+            # Si le mouvement est invalide, on peut décider de stopper l'exploration
+            # ou simplement de donner une très mauvaise note.
+            return reward - 5.0 
+
         # Récompense pour nouvelles cellules explorées
         action_cell = self._uv_to_grid_cell(action)
         if action_cell not in self.visited_cells:
             reward += 1.0
+        else:
+            reward -= 0.1
 
         # Pénalité pour recouvrements récents
         reward -= self._check_path_crossing() * 0.1

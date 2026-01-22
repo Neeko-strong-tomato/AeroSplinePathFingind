@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 import os
 from scipy.spatial import distance_matrix
+from uv_map import uv_to_3d_fast,uv_to_3d,build_uv_acceleration
 class MeshEnvironment:
     def __init__(self, mesh_path=None):
         self.mesh_path = mesh_path
@@ -155,13 +156,14 @@ class MeshEnvironment:
         """
         Calcule le centre UV de chaque face en moyennant les UV de ses sommets.
         """
-        face_uv_centers = np.zeros((len(self.mesh.faces), 2))
+        face_uv_centers = np.zeros((len(self.mesh.faces),2))
+        #uv_accel = build_uv_acceleration(self.mesh)
         
         for face_idx, face in enumerate(self.mesh.faces):
             # Les 3 sommets de la face
             vert_uv = uv_coords[face]
             # Moyenne des UV des sommets
-            face_uv_centers[face_idx] = vert_uv.mean(axis=0)
+            face_uv_centers[face_idx] = np.mean(vert_uv, axis=0)
         
         return face_uv_centers
     
