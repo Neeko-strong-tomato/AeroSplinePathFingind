@@ -120,7 +120,7 @@ class PathPlanner:
         Generate a single sweep line with adaptive bounds following the face geometry.
         """
         # Find actual x extent at this y coordinate
-        y_tolerance = self.path_spacing * 1.5
+        y_tolerance = self.path_spacing * 1.0
         y_indices = np.abs(vertices_2d[:, 1] - y) < y_tolerance
         
         if y_indices.any():
@@ -130,6 +130,11 @@ class PathPlanner:
         else:
             local_min_x = min_x
             local_max_x = max_x
+
+        # print(local_max_x, local_min_x)
+
+        local_max_x = max_x
+        local_min_x = min_x
         
         # Apply alternating direction
         if direction < 0:
@@ -137,18 +142,43 @@ class PathPlanner:
         
         # Generate evenly-spaced points along this line
         num_points = max(5, int((abs(local_max_x - local_min_x) / self.path_spacing)))
+        # num_points = 5
         x_coords = np.linspace(local_min_x, local_max_x, num_points)
         
         sweep_waypoints = []
+
+        mesh.face_normals  # Ensure face normals are calculated
+        vertex_normals = mesh.vertex_normals
+
         for x in x_coords:
             # Create 3D point in the face plane
             point_3d = face_center + x * u_vec + y * v_vec
             
             # Project to mesh surface
             projected_point = self._project_to_mesh_surface(mesh, point_3d)
+
+            # # _, _, face_index = mesh.nearest.on_surface(projected_point.reshape(1, -1))
+            # # local_normal = mesh.face_normals[face_index[0]]
             
+            # # _, _, face_index = trimesh.proximity.closest_point(mesh, [projected_point])
+            # face_index = trimesh.proximity.nearby_faces(mesh, [projected_point])
+            # vertex_normals = trimesh.geometry.mean_vertex_normals(len(mesh.vertices), mesh.faces, mesh.face_normals)
+            # # local_normal = mesh.face_normals[face_index[0][0]]
+            # local_normal = vertex_normals[mesh.faces[face_index[0][0]]].mean(axis=0)
+
+            _, _, face_index = mesh.nearest.on_surface(projected_point.reshape(1, 3))
+            idx = face_index[0]
+
+            face_vertices = mesh.faces[idx]
+            local_normal = vertex_normals[face_vertices].mean(axis=0)
+
+            local_normal /= np.linalg.norm(local_normal)
+
+            print(local_normal)
+
             # Offset by spray height
-            waypoint = projected_point + self.spray_height * face_normal
+            waypoint = projected_point + self.spray_height * local_normal
+            # waypoint = projected_point
             sweep_waypoints.append(waypoint)
         
         return sweep_waypoints

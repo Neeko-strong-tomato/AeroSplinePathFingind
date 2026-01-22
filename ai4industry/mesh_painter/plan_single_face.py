@@ -121,7 +121,7 @@ def plan_single_face(face_stl: str, output_csv: str = None,
         # Subplot 1: Mesh with waypoints
         ax1 = fig.add_subplot(121, projection='3d')
         ax1.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], 
-                   c='lightblue', s=1, alpha=0.3, label='Mesh vertices')
+                   c='darkblue', s=1, alpha=0.3, label='Mesh vertices')
         ax1.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2],
                 'r-', linewidth=1, label='Path', alpha=0.8)
         ax1.scatter(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2],
@@ -134,7 +134,7 @@ def plan_single_face(face_stl: str, output_csv: str = None,
         
         # Subplot 2: Top-down view (2D path)
         ax2 = fig.add_subplot(122)
-        ax2.scatter(vertices[:, 0], vertices[:, 1], c='lightblue', s=2, alpha=0.3, label='Mesh')
+        ax2.scatter(vertices[:, 0], vertices[:, 1], c='darkblue', s=2, alpha=0.3, label='Mesh')
         ax2.plot(waypoints[:, 0], waypoints[:, 1], 'r-', linewidth=0.5, label='Path')
         ax2.scatter(waypoints[:, 0], waypoints[:, 1], c='red', s=2, alpha=0.6)
         ax2.set_xlabel('X (m)')

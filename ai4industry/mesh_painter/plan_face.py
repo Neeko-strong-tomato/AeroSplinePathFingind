@@ -43,6 +43,16 @@ def plan_single_face(face_stl: str, spray_height: float = 0.20,
     print(f"  Bounds: X=[{mesh.bounds[0,0]:.3f}, {mesh.bounds[1,0]:.3f}]")
     print(f"          Y=[{mesh.bounds[0,1]:.3f}, {mesh.bounds[1,1]:.3f}]")
     print(f"          Z=[{mesh.bounds[0,2]:.3f}, {mesh.bounds[1,2]:.3f}]")
+
+    # mesh = mesh.subdivide()
+    # mesh = mesh.subdivide()
+    # mesh = mesh.subdivide()
+
+    print(f"✓ Mesh subdivided: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces")
+    print(f"  Area: {mesh.area:.4f} m²")
+    print(f"  Bounds: X=[{mesh.bounds[0,0]:.3f}, {mesh.bounds[1,0]:.3f}]")
+    print(f"          Y=[{mesh.bounds[0,1]:.3f}, {mesh.bounds[1,1]:.3f}]")
+    print(f"          Z=[{mesh.bounds[0,2]:.3f}, {mesh.bounds[1,2]:.3f}]")
     
     # Plan path
     print(f"\nPlanning path with:")
@@ -80,10 +90,10 @@ def plan_single_face(face_stl: str, spray_height: float = 0.20,
     if visualize:
         visualize_path(mesh, waypoints, face_path.stem)
     
-    # Save waypoints to CSV
-    output_csv = face_path.parent / f"{face_path.stem}_waypoints.csv"
-    np.savetxt(output_csv, waypoints, delimiter=',', header='X,Y,Z', comments='')
-    print(f"\n✓ Saved waypoints to: {output_csv}")
+    # # Save waypoints to CSV
+    # output_csv = face_path.parent / f"{face_path.stem}_waypoints.csv"
+    # np.savetxt(output_csv, waypoints, delimiter=',', header='X,Y,Z', comments='')
+    # print(f"\n✓ Saved waypoints to: {output_csv}")
     
     return waypoints
 
@@ -91,7 +101,7 @@ def plan_single_face(face_stl: str, spray_height: float = 0.20,
 def visualize_path(mesh, waypoints, title="Face Path"):
     """Visualize mesh and planned path."""
     
-    fig = plt.figure(figsize=(15, 5))
+    fig = plt.figure(figsize=(10, 5))
     
     # 3D view with mesh and path
     ax1 = fig.add_subplot(131, projection='3d')
@@ -102,8 +112,8 @@ def visualize_path(mesh, waypoints, title="Face Path"):
     
     poly = [[vertices[faces[j]] for j in range(len(faces))]]
     ax1.add_collection3d(Poly3DCollection(poly[0], alpha=0.3, 
-                                         edgecolor='lightgray', linewidth=0.2,
-                                         facecolor='cyan'))
+                                         edgecolor='black', linewidth=0.2,
+                                         facecolor='blue'))
     
     # Plot path
     ax1.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2], 
@@ -131,16 +141,16 @@ def visualize_path(mesh, waypoints, title="Face Path"):
     ax2.legend()
     ax2.axis('equal')
     
-    # Waypoint distance analysis
-    ax3 = fig.add_subplot(133)
-    distances = np.linalg.norm(np.diff(waypoints, axis=0), axis=1)
-    ax3.plot(distances, 'b-', linewidth=1.5, label='Distance between waypoints')
-    ax3.axhline(y=distances.mean(), color='r', linestyle='--', label=f'Mean: {distances.mean():.4f}m')
-    ax3.set_xlabel('Waypoint Index')
-    ax3.set_ylabel('Distance (m)')
-    ax3.set_title('Waypoint Spacing Analysis')
-    ax3.grid(True, alpha=0.3)
-    ax3.legend()
+    # # Waypoint distance analysis
+    # ax3 = fig.add_subplot(133)
+    # distances = np.linalg.norm(np.diff(waypoints, axis=0), axis=1)
+    # ax3.plot(distances, 'b-', linewidth=1.5, label='Distance between waypoints')
+    # ax3.axhline(y=distances.mean(), color='r', linestyle='--', label=f'Mean: {distances.mean():.4f}m')
+    # ax3.set_xlabel('Waypoint Index')
+    # ax3.set_ylabel('Distance (m)')
+    # ax3.set_title('Waypoint Spacing Analysis')
+    # ax3.grid(True, alpha=0.3)
+    # ax3.legend()
     
     plt.tight_layout()
     plt.show()
@@ -167,6 +177,15 @@ def main():
         visualize=not args.no_vis
     )
 
+    # folder = Path("stl/faces_new")
+    # for stl_file in folder.glob('*.stl'):
+    #     plan_single_face(
+    #         str(stl_file),
+    #         spray_height=args.spray_height,
+    #         spray_radius=args.spray_radius,
+    #         path_spacing=args.path_spacing,
+    #         visualize=not args.no_vis
+    #     )
 
 if __name__ == "__main__":
     main()
