@@ -393,7 +393,6 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
 if __name__ == "__main__":
     # load a large- ish PLY model with colors
     mesh = trimesh.load("./3d_models/cube.stl")
-    mesh = mesh.apply_transform(scaling_transform(0.001))
 
     # Load texture image
     image = Image.open("./UVmap.jpg")
