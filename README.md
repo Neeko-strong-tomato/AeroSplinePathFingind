@@ -9,7 +9,7 @@ Voici l’ensemble des branches de développement mises en place par l’équipe
 - Cam2.0 : Essai d’une architecture RL, basée sur la segmentation mise en place par l’équipe. Direction qui pourrait marcher avec plus de capacité d’entraînement et de temps.
 - Pauline :
 - RL2D :
-- cam : Échec de la mise en place de RL (basé sur l’architecture du main, pas forcément adaptée).
+- cam : Échec de la mise en place de RL (basé sur l’architecture du main initiale, pas forcément adaptée).
 - master :
 - rluv :
 - uv_mapping :
