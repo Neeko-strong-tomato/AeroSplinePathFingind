@@ -5,6 +5,28 @@ from shapely.geometry import Polygon, Point
 from shapely.strtree import STRtree
 from trimesh.path.entities import Line
 
+
+def scaling_transform(scale):
+    """
+    Create a 4x4 homogeneous scaling transformation matrix.
+
+    Parameters
+    ----------
+    scale : float
+        Uniform scale factor for x, y, and z axes.
+
+    Returns
+    -------
+    np.ndarray
+        4x4 homogeneous transformation matrix.
+    """
+    return np.array([
+        [scale, 0.0,   0.0,   0.0],
+        [0.0,   scale, 0.0,   0.0],
+        [0.0,   0.0,   scale, 0.0],
+        [0.0,   0.0,   0.0,   1.0]
+    ])
+
 def raycast_uv(mesh: trimesh.Trimesh,
                ray_origin: np.ndarray,
                ray_direction: np.ndarray):
@@ -247,6 +269,41 @@ def uv_to_face_id(mesh: trimesh.Trimesh, uv: np.ndarray, eps=1e-8):
 
     return None
 
+def estimate_uv_scale(mesh: trimesh.Trimesh, eps=1e-12):
+    """
+    Estimate how many 3D units correspond to 1 UV unit (average).
+    """
+
+    vertices = mesh.vertices
+    faces = mesh.faces
+    uvs = mesh.visual.uv
+
+    scales = []
+
+    for f in faces:
+        v3d = vertices[f]      # (3, 3)
+        vuv = uvs[f]           # (3, 2)
+
+        # Edge lengths in 3D
+        e3d = [
+            np.linalg.norm(v3d[1] - v3d[0]),
+            np.linalg.norm(v3d[2] - v3d[1]),
+            np.linalg.norm(v3d[0] - v3d[2]),
+        ]
+
+        # Edge lengths in UV
+        euv = [
+            np.linalg.norm(vuv[1] - vuv[0]),
+            np.linalg.norm(vuv[2] - vuv[1]),
+            np.linalg.norm(vuv[0] - vuv[2]),
+        ]
+
+        for l3d, luv in zip(e3d, euv):
+            if luv > eps:
+                scales.append(l3d / luv)
+
+    return np.mean(scales)
+
 def create_point_cloud(mesh,resolution = 64):
     uv_tree = build_uv_acceleration(mesh)
 
@@ -284,10 +341,10 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
     jump_list = [0]
     path = []
     point_amount = points.shape[0]
-    print(point_amount)
+    print("Model's cloud point amount : ",point_amount)
     exploration_map = np.zeros((points.shape[0]))
-
-    jumping_distance = 0.1
+    jumping_distance = estimate_uv_scale(mesh) / 8
+    print("Estimated scale of UV map",jumping_distance*8)
     jumping = False
     jump_amount = 0
     current_index = starting_pos_index
@@ -303,7 +360,7 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
 
                 dir = ((points[i] - points[current_index]) / np.linalg.norm(points[i] - points[current_index]))
 
-                dist = 5*distance_position(points[current_index],points[i]) + 0*distance_normal(mesh.face_normals[face_ids[current_index]],mesh.face_normals[face_ids[i]]) + 0 * distance_previous_direction(previous_dir,dir)
+                dist = 5*distance_position(points[current_index],points[i]) + 1 * distance_normal(mesh.face_normals[face_ids[current_index]],mesh.face_normals[face_ids[i]]) + 0 * distance_previous_direction(previous_dir,dir)
                 
                 if(dist < min_distance):
                     best_index = i
@@ -335,7 +392,8 @@ def calculate_path(mesh,points,face_ids,starting_pos_index = 0):
 
 if __name__ == "__main__":
     # load a large- ish PLY model with colors
-    mesh = trimesh.load("./3d_models/surface.stl")
+    mesh = trimesh.load("./3d_models/cube.stl")
+    mesh = mesh.apply_transform(scaling_transform(0.001))
 
     # Load texture image
     image = Image.open("./UVmap.jpg")
@@ -346,11 +404,11 @@ if __name__ == "__main__":
     if(not hasattr(mesh.visual,'uv')):
         mesh = mesh.unwrap(image)
 
-    points = create_point_cloud(mesh,resolution=64)
+    points = create_point_cloud(mesh,resolution=128)
 
     # distance from point to surface of meshdistances
     # create a PointCloud object out of each (n,3) list of points
-    cloud_close = trimesh.points.PointCloud(points[0])
+    cloud = trimesh.points.PointCloud(points[0])
 
     # Convertir faces → positions 3D
     (path_points,jump_list) = calculate_path(mesh,points[0],points[1])
@@ -371,7 +429,7 @@ if __name__ == "__main__":
     )
 
     # create a scene containing the mesh and two sets of points
-    scene = trimesh.Scene([mesh,path])
+    scene = trimesh.Scene([mesh,cloud,path])
 
     # show the scene we are using
     scene.show()
