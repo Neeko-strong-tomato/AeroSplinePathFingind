@@ -11,21 +11,22 @@ def load_mesh(path):
     mesh = trimesh.load_mesh(path)
     mesh = mesh.subdivide()
     mesh = mesh.subdivide()
-    mesh = mesh.subdivide()
     mesh.apply_translation(-mesh.centroid)
     mesh.apply_scale(1.0 / mesh.scale)
     mesh.visual.face_colors = [0, 0, 0, 100]
     return mesh
 
+
+
 def create_path(V):
     path = []
     covered = []
     available_point = [True]*len(V)
-    i_path = [0,1]
+    i_path = [0,1,2,3]
     for k in range(1000):
         print(f"{k}/1000")
         norm_min = 100
-        for i in range(1,len(V)):
+        for i in range(3,len(V)):
             if available_point[i] :
                 diff = V[i_path[-1]]-V[i]
                 norm_i = diff[0]**2 + diff[1]**2 + diff[2]**2
@@ -37,8 +38,14 @@ def create_path(V):
                     i_min = i
         i_path.append(i_min)
         available_point[i_min] =False
-        path.append(trimesh.load_path(np.array([V[i_path[-2]], V[i_path[-1]]])))
-    
+
+        dot = float(abs(np.dot(V[i_path[-1]]-V[i_path[-2]], V[i_path[-2]]-V[i_path[-3]])))
+
+        red = (dot*100000)%255
+        print(f"dot : {dot} red : {red}")
+
+        colors = np.array([[red,0,255,255]], dtype=np.uint8)
+        path.append(trimesh.load_path(np.array([V[i_path[-2]], V[i_path[-1]]]), colors=colors))
     return path
 
 def print_scene(mesh):
