@@ -7,7 +7,7 @@ Voici l’ensemble des branches de développement mises en place par l’équipe
 - Main : Branche principale.
 - Auto-en-full-vibecoding : Algorithme de recouvrement de faces (travail de l’équipe algo).
 - Cam2.0 : Essai d’une architecture RL, basée sur la segmentation mise en place par l’équipe. Direction qui pourrait marcher avec plus de capacité d’entraînement et de temps.
-- Pauline :
+- Maillage : Tentataive d'utiliser la segmentation pour effectué le dépliage du mesh et appliqué les points UV avant de reconstruire le mesh
 - RL2D :
 - cam : Échec de la mise en place de RL (basé sur l’architecture du main initiale, pas forcément adaptée).
 - noLLM : Première version algorithmique très simple. Le but de cette branche était de faire un test sans utilisation de LLM pour découvrir trimesh.
